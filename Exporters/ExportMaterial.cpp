@@ -36,12 +36,6 @@ void ExportMaterial(const UUnrealMaterial* Mat)
 
 	CMaterialParams Params;
 	Mat->GetParams(Params);
-	if ((Params.IsNull() || Params.Diffuse == Mat) && AllTextures.Num() == 0)
-	{
-		// empty/unknown material, or material itself is a texture
-		appPrintf("Ignoring %s'%s' due to empty parameters\n", Mat->GetClassName(), Mat->Name);
-		return;
-	}
 
 	FArchive* Ar = CreateExportArchive(Mat, EFileArchiveOptions::TextFile, "%s.mat", Mat->Name);
 	if (!Ar) return;
