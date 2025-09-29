@@ -4,6 +4,9 @@
 #include "UnObject.h"
 #include "UnrealMaterial/UnMaterial.h"
 #include "UnrealMaterial/UnMaterial3.h"
+#include "UnrealMaterial/UnMaterialExpression.h"
+#include "unrealPackage/UnPackage.h"
+
 
 #include "Exporters.h"
 
@@ -17,10 +20,10 @@ FString GetTextureType(const UUnrealMaterial* Tex)
 		const char* type;
 	};
 
-	TextureSuffix suffixMap[] = 
+	TextureSuffix suffixMap[] =
 	{
 		{ "_D", "Diffuse" },
-		{ "_pack", "Diffuse"}, // ... In custom materials, but used common
+		//{ "_pack", "Diffuse"}, // ... In custom materials, but used common
 		{ "_N", "Normal" },
 		{ "_MASK", "Mask" },
 		{ "_Cube", "Cubemap" },
@@ -68,7 +71,7 @@ void ExportMaterial(const UUnrealMaterial* Mat)
 
 	//todo: handle Mat->IsTexture(), Mat->IsTextureCube() to select exporter code
 	//todo: remove separate texture handling from Main.cpp exporter registraction
-	
+
 
 	TArray<UUnrealMaterial*> AllTextures;
 	CMaterialParams Params;
@@ -80,7 +83,7 @@ void ExportMaterial(const UUnrealMaterial* Mat)
 
 	TArray<UObject*> ToExport;
 
-	
+
 	if (Mat->IsA("Material3"))
 	{
 		const UMaterial3* Mat3 = static_cast<const UMaterial3*>(Mat);
@@ -92,7 +95,64 @@ void ExportMaterial(const UUnrealMaterial* Mat)
 				appPrintf("Exporting raw texture [%d]: %s\n", i, Tex->Name);
 				ToExport.AddUnique(Tex);
 			}
+
 		}
+
+		/*
+		UMaterialExpressionTextureSampleParameter2D* TexExpr = (UMaterialExpressionTextureSampleParameter2D*)Expr;
+		if (TexExpr)
+		{
+			//appPrintf("BINGO! %s", TexExpr->ParameterName);
+		}
+		*/
+		/*
+	}
+
+
+		if (TexExpr->Texture)
+		{
+			Ar->Printf("TextureParam2D=%s\n", TexExpr->Texture->Name);
+			ToExport.AddUnique(TexExpr->Texture);
+		}
+		if (TexExpr->ParameterName)
+		{
+			Ar->Printf("ParamName=%s\n", TexExpr->ParameterName);
+		}
+		-*
+	}
+
+
+	/*
+	else if (!stricmp(ClassName, "MaterialExpressionScalarParameter"))
+	{
+		auto* ScalarExpr = static_cast<UMaterialExpressionScalarParameter*>(Expr);
+		Ar->Printf("ScalarParam=%s Value=%.3f\n", ScalarExpr->ParameterName, ScalarExpr->DefaultValue);
+	}
+	else if (!stricmp(ClassName, "MaterialExpressionVectorParameter"))
+	{
+		auto* VectorExpr = static_cast<UMaterialExpressionVectorParameter*>(Expr);
+		Ar->Printf("VectorParam=%s Value=(%.3f, %.3f, %.3f, %.3f)\n",
+			VectorExpr->ParameterName,
+			VectorExpr->DefaultValue.R,
+			VectorExpr->DefaultValue.G,
+			VectorExpr->DefaultValue.B,
+			VectorExpr->DefaultValue.A);
+	}
+	else if (!stricmp(ClassName, "MaterialExpressionStaticSwitchParameter"))
+	{
+		auto* SwitchExpr = static_cast<UMaterialExpressionStaticSwitchParameter*>(Expr);
+		Ar->Printf("StaticSwitch=%s Default=%s\n",
+			SwitchExpr->ParameterName,
+			SwitchExpr->DefaultValue ? "True" : "False");
+	}
+	else
+	{
+		Ar->Printf("Expression=%s (%s)\n", Expr->Name, ClassName);
+	}
+	*/
+
+
+
 	}
 
 #define PROC(Arg)	\
@@ -136,27 +196,130 @@ void ExportMaterial(const UUnrealMaterial* Mat)
 		delete PropAr;
 	}
 
-	// Export other textures
+
+	if (Mat->IsA("Material3"))
+	{
+		const UMaterial3* Material = static_cast<const UMaterial3*>(Mat);
+		for (int i = 0; i < Material->Expressions.Num(); i++)
+		{
+			if (!Material->Expressions[i]) continue;
+
+			auto Tex2D = static_cast<const UMaterialExpressionTextureSampleParameter2D*>(Material->Expressions[i]);
+
+			if (Tex2D)
+			{
+				if (Tex2D->Texture)
+				{
+					UTexture3* Tex = Tex2D->Texture;
+
+					if (!Tex) continue;
+					
+					const char* paramName = nullptr;
+
+					if (Tex2D->ParameterName)
+					{
+						if (Tex2D->ParameterName.Str)
+							paramName = Tex2D->ParameterName;
+					}
+					const char* texName = nullptr;
+
+					if (Tex->Name != NULL)
+					{
+						texName = Tex->Name;
+					}
+
+					if (paramName != "None")
+					{
+						appPrintf("Found MaterialExpressionTextureSampleParameter2D match: %s = %s \n", paramName, texName);
+						Ar->Printf("%s=%s\n", paramName, texName);
+						ToExport.Add(Tex);
+					}
+					paramName = nullptr;
+					Tex = nullptr;
+				}
+				continue;
+			}
+
+			auto TexSampleParameter = static_cast<const UMaterialExpressionTextureSampleParameter*>(Material->Expressions[i]);
+			if (TexSampleParameter)
+			{
+				if (TexSampleParameter->Texture)
+				{
+					UTexture3* Tex = TexSampleParameter->Texture;
+
+					if (!Tex) continue;
+
+					const char* paramName = nullptr;
+
+					if (TexSampleParameter->ParameterName)
+					{
+						if (TexSampleParameter->ParameterName.Str)
+							paramName = TexSampleParameter->ParameterName;
+					}
+					const char* texName = nullptr;
+
+					if (TexSampleParameter->Name != NULL)
+					{
+						texName = Tex->Name;
+					}
+
+					if (paramName != "None")
+					{
+						appPrintf("Found UMaterialExpressionTextureSampleParameter match: %s = %s \n", paramName, texName);
+						Ar->Printf("%s=%s\n", paramName, texName);
+						ToExport.Add(Tex);
+					}
+					paramName = nullptr;
+					Tex = nullptr;
+				}
+				continue;
+			}
+			/*
+			auto TexTexSample = static_cast<const UMaterialExpressionTextureSample*>(Material->Expressions[i]);
+			if (TexTexSample)
+			{
+				if (TexTexSample->Texture)
+				{
+					appPrintf("BINGO! %s = %s \n", Material->Expressions[i]->Name, TexTexSample->Texture);
+				}
+				continue;
+			}
+			*/
+
+
+		}
+	}
+	
+
+	
+	// HACK - Export other textures
 	int numOtherTextures = 0;
 	for (int i = 0; i < AllTextures.Num(); i++)
 	{
 		//Export with texture type name
 		UUnrealMaterial* Tex = AllTextures[i];
 		if (!Tex) continue;
-
+		//This works but is hacky
+		
 		FString TextureType = GetTextureType(Tex);
 		if (TextureType.Len() > 0)
 		{
-			Ar->Printf("%s=%s\n", *TextureType, Tex->Name);
+			Ar->Printf("HACK_%s=%s\n", *TextureType, Tex->Name);
 		}
 		else
 		{
-			Ar->Printf("Other[%d]=%s\n", numOtherTextures++, Tex->Name);
+			Ar->Printf("HACK_Other[%d]=%s\n", numOtherTextures++, Tex->Name);
 		}
+		
 
 		ToExport.Add(Tex);
-
 	}
+	
+	
+
+
+
+
 
 	delete Ar; // close .mat file
 

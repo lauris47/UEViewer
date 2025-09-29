@@ -125,3 +125,5 @@ public:
 	REGISTER_CLASS(UMaterialExpressionVectorParameter)
 
 #endif // __UNMATERIAL_EXPRESSION_H__
+
+//TODDO: MaterialExpressionTextureSampleParameterCube
