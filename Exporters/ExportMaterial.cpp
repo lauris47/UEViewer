@@ -8,6 +8,44 @@
 #include "Exporters.h"
 
 
+//Hack. get texture type by addition in texture name
+FString GetTextureType(const UUnrealMaterial* Tex)
+{
+
+	struct TextureSuffix {
+		const char* suffix;
+		const char* type;
+	};
+
+	TextureSuffix suffixMap[] = 
+	{
+		{ "_D", "Diffuse" },
+		{ "_pack", "Diffuse"}, // ... In custom materials, but used common
+		{ "_N", "Normal" },
+		{ "_MASK", "Mask" },
+		{ "_Cube", "Cubemap" },
+		{ "_crl", "Detail"}, // ???
+	};
+
+	const char* name = Tex->Name;
+	int nameLen = strlen(name);
+
+
+	for (int i = 0; i < ARRAY_COUNT(suffixMap); i++)
+	{
+		const char* suffix = suffixMap[i].suffix;
+		int suffixLen = strlen(suffix);
+
+		if (nameLen >= suffixLen && stricmp(name + nameLen - suffixLen, suffix) == 0)
+		{
+			appPrintf("Type: %s for texture %s\n", suffixMap[i].type, name);
+			return FString(suffixMap[i].type);
+		}
+	}
+
+	return "";
+}
+
 void ExportMaterial(const UUnrealMaterial* Mat)
 {
 	guard(ExportMaterial);
@@ -30,17 +68,32 @@ void ExportMaterial(const UUnrealMaterial* Mat)
 
 	//todo: handle Mat->IsTexture(), Mat->IsTextureCube() to select exporter code
 	//todo: remove separate texture handling from Main.cpp exporter registraction
+	
 
 	TArray<UUnrealMaterial*> AllTextures;
-	Mat->AppendReferencedTextures(AllTextures, false);
-
 	CMaterialParams Params;
-	Mat->GetParams(Params);
+
+	Mat->AppendReferencedTextures(AllTextures, false);
 
 	FArchive* Ar = CreateExportArchive(Mat, EFileArchiveOptions::TextFile, "%s.mat", Mat->Name);
 	if (!Ar) return;
 
 	TArray<UObject*> ToExport;
+
+	
+	if (Mat->IsA("Material3"))
+	{
+		const UMaterial3* Mat3 = static_cast<const UMaterial3*>(Mat);
+		for (int i = 0; i < Mat3->ReferencedTextures.Num(); i++)
+		{
+			UTexture3* Tex = Mat3->ReferencedTextures[i];
+			if (Tex)
+			{
+				appPrintf("Exporting raw texture [%d]: %s\n", i, Tex->Name);
+				ToExport.AddUnique(Tex);
+			}
+		}
+	}
 
 #define PROC(Arg)	\
 	if (Params.Arg) \
@@ -58,6 +111,23 @@ void ExportMaterial(const UUnrealMaterial* Mat)
 	PROC(Cube);
 	PROC(Mask);
 
+	//Testing these:
+	PROC(Detail);
+	PROC(AO);
+	PROC(GlowMap);
+	PROC(PaintMask);
+	PROC(TeamColor);
+	PROC(ColorLookup);
+	PROC(DecalTexture);
+	PROC(TilingPattern);
+	PROC(HexMask);
+	PROC(Environment);
+	PROC(Reflection);
+	PROC(Overlay);
+	PROC(Noise);
+	PROC(Roughness);
+	PROC(Metallic);
+
 	// Dump material properties to a separate file
 	FArchive* PropAr = CreateExportArchive(Mat, EFileArchiveOptions::TextFile, "%s.props.txt", Mat->Name);
 	if (PropAr)
@@ -70,12 +140,22 @@ void ExportMaterial(const UUnrealMaterial* Mat)
 	int numOtherTextures = 0;
 	for (int i = 0; i < AllTextures.Num(); i++)
 	{
+		//Export with texture type name
 		UUnrealMaterial* Tex = AllTextures[i];
-		if (ToExport.FindItem(Tex) < 0)
+		if (!Tex) continue;
+
+		FString TextureType = GetTextureType(Tex);
+		if (TextureType.Len() > 0)
+		{
+			Ar->Printf("%s=%s\n", *TextureType, Tex->Name);
+		}
+		else
 		{
 			Ar->Printf("Other[%d]=%s\n", numOtherTextures++, Tex->Name);
-			ToExport.Add(Tex);
 		}
+
+		ToExport.Add(Tex);
+
 	}
 
 	delete Ar; // close .mat file
@@ -102,3 +182,6 @@ void ExportMaterial(const UUnrealMaterial* Mat)
 
 	unguardf("%s'%s'", Mat->GetClassName(), Mat->Name);
 }
+
+
+

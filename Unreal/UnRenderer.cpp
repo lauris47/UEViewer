@@ -1743,8 +1743,8 @@ void UUnreal3Material::GetParams(CMaterialParams &Params) const
 			Params.Normal = Tex;
 		else if (!stricmp(Name + len - 2, "_m"))
 			Params.Mask = Tex;
-//		else
-//			appPrintf("Tex: %s\n", Name);
+		else 
+			appPrintf("Tex: %s\n", Name);
 	}
 	Params.SpecularMaskChannel = TC_G;
 
@@ -1977,6 +1977,12 @@ void UMaterial3::GetParams(CMaterialParams &Params) const
 	Super::GetParams(Params);
 
 	int DiffWeight = 0, NormWeight = 0, SpecWeight = 0, SpecPowWeight = 0, OpWeight = 0, EmWeight = 0, CubeWeight = 0;
+	
+	int DetailWeight = 0, AOWEIGHT = 0, GlowMapWeight = 0, PaintMaskWeight = 0;
+	int TeamColorWeight = 0, ColorLookupWeight = 0, DecalTextureWeight = 0, TilingPatternWeight = 0;
+	int HexMaskWeight = 0, EnvironmentWeight = 0, ReflectionWeight = 0, OverlayWeight = 0;
+	int NoiseWeight = 0, RoughnessWeight = 0, MetallicWeight = 0;
+
 #define DIFFUSE(check,weight)			\
 	if (weight > DiffWeight && check)	\
 	{									\
@@ -2040,6 +2046,110 @@ void UMaterial3::GetParams(CMaterialParams &Params) const
 		Params.EmissiveColor = Color;	\
 		EmcWeight = weight;				\
 	}
+#define DETAIL(check,weight) \
+	if (weight > DetailWeight && check) \
+	{ \
+		Params.Detail = Tex; \
+		DetailWeight = weight; \
+	}
+
+#define AO(check,weight) \
+	if (weight > AOWEIGHT && check) \
+	{ \
+		Params.AO = Tex; \
+		AOWEIGHT = weight; \
+	}
+
+#define GLOWMAP(check,weight) \
+	if (weight > GlowMapWeight && check) \
+	{ \
+		Params.GlowMap = Tex; \
+		GlowMapWeight = weight; \
+	}
+
+#define PAINTMASK(check,weight) \
+	if (weight > PaintMaskWeight && check) \
+	{ \
+		Params.PaintMask = Tex; \
+		PaintMaskWeight = weight; \
+	}
+
+#define TEAMCOLOR(check,weight) \
+	if (weight > TeamColorWeight && check) \
+	{ \
+		Params.TeamColor = Tex; \
+		TeamColorWeight = weight; \
+	}
+
+#define COLORLOOKUP(check,weight) \
+	if (weight > ColorLookupWeight && check) \
+	{ \
+		Params.ColorLookup = Tex; \
+		ColorLookupWeight = weight; \
+	}
+
+#define DECALTEXTURE(check,weight) \
+	if (weight > DecalTextureWeight && check) \
+	{ \
+		Params.DecalTexture = Tex; \
+		DecalTextureWeight = weight; \
+	}
+
+#define TILINGPATTERN(check,weight) \
+	if (weight > TilingPatternWeight && check) \
+	{ \
+		Params.TilingPattern = Tex; \
+		TilingPatternWeight = weight; \
+	}
+
+#define HEXMASK(check,weight) \
+	if (weight > HexMaskWeight && check) \
+	{ \
+		Params.HexMask = Tex; \
+		HexMaskWeight = weight; \
+	}
+
+#define ENVIRONMENT(check,weight) \
+	if (weight > EnvironmentWeight && check) \
+	{ \
+		Params.Environment = Tex; \
+		EnvironmentWeight = weight; \
+	}
+
+#define REFLECTION(check,weight) \
+	if (weight > ReflectionWeight && check) \
+	{ \
+		Params.Reflection = Tex; \
+		ReflectionWeight = weight; \
+	}
+
+#define OVERLAY(check,weight) \
+	if (weight > OverlayWeight && check) \
+	{ \
+		Params.Overlay = Tex; \
+		OverlayWeight = weight; \
+	}
+
+#define NOISE(check,weight) \
+	if (weight > NoiseWeight && check) \
+	{ \
+		Params.Noise = Tex; \
+		NoiseWeight = weight; \
+	}
+
+#define ROUGHNESS(check,weight) \
+	if (weight > RoughnessWeight && check) \
+	{ \
+		Params.Roughness = Tex; \
+		RoughnessWeight = weight; \
+	}
+
+#define METALLIC(check,weight) \
+	if (weight > MetallicWeight && check) \
+	{ \
+		Params.Metallic = Tex; \
+		MetallicWeight = weight; \
+	}
 
 	int ArGame = GetGame();
 
@@ -2056,8 +2166,8 @@ void UMaterial3::GetParams(CMaterialParams &Params) const
 		//!! - separate code (common for UMaterial3 + UMaterialInstanceConstant)
 		//!! - may implement with tables + macros
 		//!! - catch normalmap, specular and emissive textures
-		if (strstr(Name, "noise")) continue;
-		if (strstr(Name, "detail")) continue;
+		//if (strstr(Name, "noise")) continue;
+		//if (strstr(Name, "detail")) continue;
 
 		DIFFUSE(strstr(Name, "diff"), 100);
 		NORMAL (strstr(Name, "norm"), 100);
@@ -2065,6 +2175,27 @@ void UMaterial3::GetParams(CMaterialParams &Params) const
 		DIFFUSE(strstr(Name, "_tex"), 60);
 		DIFFUSE(!strcmp(Name + len - 2, "_d"), 20);
 		OPACITY(strstr(Name, "_om"), 20);
+		//
+		/*
+		* 
+		* 	PROC(Detail);
+			PROC(AO);
+			PROC(GlowMap);
+			PROC(PaintMask);
+			PROC(TeamColor);
+			PROC(ColorLookup);
+			PROC(DecalTexture);
+			PROC(TilingPattern);
+			PROC(HexMask);
+			PROC(Environment);
+			PROC(Reflection);
+			PROC(Overlay);
+			PROC(Noise);
+			PROC(Roughness);
+			PROC(Metallic);
+		* */
+		// 
+		// 
 //		CUBEMAP(strstr(Name, "cubemap"), 100); -- bad
 #if 0
 		if (!strcmp(Name + len - 3, "_di"))		// The Last Remnant ...
@@ -2152,11 +2283,34 @@ void UMaterial3::AppendReferencedTextures(TArray<UUnrealMaterial*>& OutTextures,
 		for (int i = 0; i < ReferencedTextures.Num(); i++)
 		{
 			if (ReferencedTextures[i])
-				OutTextures.AddUnique(ReferencedTextures[i]);
+				OutTextures.Add(ReferencedTextures[i]);
 		}
+		for (int i = 0; i < Expressions.Num(); i++)
+		{
+			UObject* Expr = Expressions[i];
+			if (Expr && Expr->IsA("Texture3"))
+			{
+				UTexture3* Tex = static_cast<UTexture3*>(Expr);
+				if (Tex)
+					OutTextures.AddUnique(Tex);
+			}
+		}
+
+		for (int i = 0; i < Expressions.Num(); i++)
+		{
+			UObject* Expr = Expressions[i];
+			if (Expr)
+				appPrintf("Expr[%d]: %s (%s)\n", i, Expr->Name, Expr->GetClassName());
+		}
+
+		if (ReferencedTextures.Num() == 0)
+			appPrintf("Warning: Material %s has no ReferencedTextures\n", Name);
+
 	}
 	unguard;
 }
+
+
 
 void UTexture2D::SetupGL()
 {
@@ -2572,6 +2726,7 @@ void UMaterialInstanceConstant::GetParams(CMaterialParams &Params) const
 void UMaterialInstanceConstant::AppendReferencedTextures(TArray<UUnrealMaterial*>& OutTextures, bool onlyRendered) const
 {
 	guard(UMaterialInstanceConstant::AppendReferencedTextures);
+	
 	if (onlyRendered)
 	{
 		// default implementation does that
@@ -2579,10 +2734,14 @@ void UMaterialInstanceConstant::AppendReferencedTextures(TArray<UUnrealMaterial*
 	}
 	else
 	{
+	
 		for (int i = 0; i < TextureParameterValues.Num(); i++)
 		{
-			if (TextureParameterValues[i].ParameterValue)
-				OutTextures.AddUnique(TextureParameterValues[i].ParameterValue);
+			const auto& Param = TextureParameterValues[i];
+			appPrintf("Param[%d]: %s = %s\n", i, Param.ParameterName, Param.ParameterValue ? Param.ParameterValue->Name : "<null>");
+			if (Param.ParameterValue)
+				OutTextures.AddUnique(Param.ParameterValue);
+
 		}
 		if (Parent && Parent != this) Parent->AppendReferencedTextures(OutTextures, onlyRendered);
 	}
