@@ -122,7 +122,8 @@ public:
 	REGISTER_CLASS(UMaterialExpressionScalarParameter) \
 	REGISTER_CLASS(UMaterialExpressionStaticBoolParameter) \
 	REGISTER_CLASS(UMaterialExpressionStaticSwitchParameter) \
-	REGISTER_CLASS(UMaterialExpressionVectorParameter)
+	REGISTER_CLASS(UMaterialExpressionVectorParameter) 
+	//REGISTER_CLASS(MaterialExpressionTextureSampleParameterCube)
 
 #endif // __UNMATERIAL_EXPRESSION_H__
 
