@@ -7,14 +7,12 @@
 #include "UnrealMaterial/UnMaterialExpression.h"
 #include "unrealPackage/UnPackage.h"
 
-
 #include "Exporters.h"
 
 
 //Hack. get texture type by addition in texture name
 FString GetTextureType(const UUnrealMaterial* Tex)
 {
-
 	struct TextureSuffix {
 		const char* suffix;
 		const char* type;
@@ -72,7 +70,6 @@ void ExportMaterial(const UUnrealMaterial* Mat)
 	//todo: handle Mat->IsTexture(), Mat->IsTextureCube() to select exporter code
 	//todo: remove separate texture handling from Main.cpp exporter registraction
 
-
 	TArray<UUnrealMaterial*> AllTextures;
 	CMaterialParams Params;
 
@@ -82,7 +79,6 @@ void ExportMaterial(const UUnrealMaterial* Mat)
 	if (!Ar) return;
 
 	TArray<UObject*> ToExport;
-
 
 	if (Mat->IsA("Material3"))
 	{
@@ -95,64 +91,7 @@ void ExportMaterial(const UUnrealMaterial* Mat)
 				appPrintf("Exporting raw texture [%d]: %s\n", i, Tex->Name);
 				ToExport.AddUnique(Tex);
 			}
-
 		}
-
-		/*
-		UMaterialExpressionTextureSampleParameter2D* TexExpr = (UMaterialExpressionTextureSampleParameter2D*)Expr;
-		if (TexExpr)
-		{
-			//appPrintf("BINGO! %s", TexExpr->ParameterName);
-		}
-		*/
-		/*
-	}
-
-
-		if (TexExpr->Texture)
-		{
-			Ar->Printf("TextureParam2D=%s\n", TexExpr->Texture->Name);
-			ToExport.AddUnique(TexExpr->Texture);
-		}
-		if (TexExpr->ParameterName)
-		{
-			Ar->Printf("ParamName=%s\n", TexExpr->ParameterName);
-		}
-		-*
-	}
-
-
-	/*
-	else if (!stricmp(ClassName, "MaterialExpressionScalarParameter"))
-	{
-		auto* ScalarExpr = static_cast<UMaterialExpressionScalarParameter*>(Expr);
-		Ar->Printf("ScalarParam=%s Value=%.3f\n", ScalarExpr->ParameterName, ScalarExpr->DefaultValue);
-	}
-	else if (!stricmp(ClassName, "MaterialExpressionVectorParameter"))
-	{
-		auto* VectorExpr = static_cast<UMaterialExpressionVectorParameter*>(Expr);
-		Ar->Printf("VectorParam=%s Value=(%.3f, %.3f, %.3f, %.3f)\n",
-			VectorExpr->ParameterName,
-			VectorExpr->DefaultValue.R,
-			VectorExpr->DefaultValue.G,
-			VectorExpr->DefaultValue.B,
-			VectorExpr->DefaultValue.A);
-	}
-	else if (!stricmp(ClassName, "MaterialExpressionStaticSwitchParameter"))
-	{
-		auto* SwitchExpr = static_cast<UMaterialExpressionStaticSwitchParameter*>(Expr);
-		Ar->Printf("StaticSwitch=%s Default=%s\n",
-			SwitchExpr->ParameterName,
-			SwitchExpr->DefaultValue ? "True" : "False");
-	}
-	else
-	{
-		Ar->Printf("Expression=%s (%s)\n", Expr->Name, ClassName);
-	}
-	*/
-
-
-
 	}
 
 #define PROC(Arg)	\
@@ -196,61 +135,82 @@ void ExportMaterial(const UUnrealMaterial* Mat)
 		delete PropAr;
 	}
 
-	if (Mat->IsA("Material3"))
-	{
-		const UMaterial3* Material = static_cast<const UMaterial3*>(Mat);
-		for (int i = 0; i < Material->Expressions.Num(); i++)
-		{
-			if (!Material->Expressions[i]) continue;
+	TArray<TMapPair<const char*, const char*>> ExportTexMap;
 
-			// UMaterialExpressionTextureSampleParameter2D is inherited from UMaterialExpressionTextureSampleParameter, so no need to check it separately
-			// TODO MaterialExpressionTextureSampleParameterCube
-			auto TexSampleParameter = static_cast<const UMaterialExpressionTextureSampleParameter*>(Material->Expressions[i]);
-			if (TexSampleParameter)
-			{
-				if (TexSampleParameter->Texture)
-				{
-					UTexture3* Tex = TexSampleParameter->Texture;
-
-					if (!Tex) continue;
-
-					const char* paramName = TexSampleParameter->ParameterName;
-					const char* texName = Tex->Name;
-
-					if (paramName != "None")
-					{
-						appPrintf("Found UMaterialExpressionTextureSampleParameter match: %s = %s \n", paramName, texName);
-						Ar->Printf("%s=%s\n", paramName, texName);
-					}
-					ToExport.Add(Tex);
-					Tex = nullptr;
-				}
-				continue;
-			}
-		}
-	}
-	
-
-	// HACK - Export other textures
+	// HACK - First iterration, to gather all type-texture map. The type is assumed based on texture name, so there is no guarantee it is correct.
 	int numOtherTextures = 0;
 	for (int i = 0; i < AllTextures.Num(); i++)
 	{
 		//Export with texture type name
 		UUnrealMaterial* Tex = AllTextures[i];
 		if (!Tex) continue;
+
 		//This works but is hacky
-		
 		FString TextureType = GetTextureType(Tex);
 		if (TextureType.Len() > 0)
 		{
-			Ar->Printf("%s=%s\n", *TextureType, Tex->Name);
+			const char* paramName = appStrdup(*TextureType);
+			ExportTexMap.Add({ paramName, Tex->Name });
 		}
 		else
 		{
-			Ar->Printf("Other[%d]=%s\n", numOtherTextures++, Tex->Name);
+			char OtherType[64];
+			appSprintf(ARRAY_ARG(OtherType), "Other[%d]", numOtherTextures++);
+			ExportTexMap.Add({ OtherType, Tex->Name });
 		}
-		
-		ToExport.Add(Tex);
+	}
+
+	// Second iteration: export named texture parameters from material expressions and overwrite the previous list.
+	// There can be a mistake if few parameters are using the same texture path...
+	const UMaterial3* Material = static_cast<const UMaterial3*>(Mat);
+	for (int i = 0; i < Material->Expressions.Num(); i++)
+	{
+		if (!Material->Expressions[i]) continue;
+
+		// UMaterialExpressionTextureSampleParameter2D is inherited from UMaterialExpressionTextureSampleParameter, so no need to check it separately
+		// TODO MaterialExpressionTextureSampleParameterCube - not implemented yet
+		auto TexSampleParameter = static_cast<const UMaterialExpressionTextureSampleParameter*>(Material->Expressions[i]);
+		if (TexSampleParameter && TexSampleParameter->Texture)
+		{
+			UUnrealMaterial* ExpTex = TexSampleParameter->Texture;
+			const char* paramName = TexSampleParameter->ParameterName;
+			const char* texPath = ExpTex->Name;
+
+			bool KeyChanged = false;
+			const char* oldKey = nullptr;
+			for (int x = 0; x < ExportTexMap.Num(); x++)
+			{
+				const char* value = ExportTexMap[x].Value;
+				if (value == texPath)
+				{
+					oldKey = ExportTexMap[x].Key;
+					ExportTexMap[x].Key = paramName;
+					KeyChanged = true;
+					break;
+				}
+			}
+
+			if (KeyChanged)
+			{
+				const char* safeOldKey = oldKey ? oldKey : "UNKNOWN";
+				const char* safeParamName = paramName ? paramName : "UNKNOWN";
+				char printme[512];
+				appSprintf(ARRAY_ARG(printme), "Changing texture type from %s to %s", safeOldKey, safeParamName);
+			}
+			else
+			{
+				ExportTexMap.Add({ paramName, texPath });
+			}
+		}
+	}
+
+	for (int i = 0; i < AllTextures.Num(); i++)
+	{
+		UUnrealMaterial* Tex = AllTextures[i];
+		if (Tex == NULL) continue;
+
+		Ar->Printf("%s=%s\n", ExportTexMap[i].Key, ExportTexMap[i].Value);
+		ToExport.AddUnique(Tex);
 	}
 
 
