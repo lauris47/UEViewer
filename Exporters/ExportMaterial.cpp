@@ -8,6 +8,8 @@
 #include "unrealPackage/UnPackage.h"
 #include "Exporters.h"
 
+
+
 bool IsValidCString(const char* str, size_t maxLen = 1024)
 {
 	if (!str) return false;
@@ -122,6 +124,7 @@ void ExportMaterial(const UUnrealMaterial* Mat)
 	}
 
 	PROC(Diffuse);
+	//PROC(DiffuseColor);
 	PROC(Normal);
 	PROC(Specular);
 	PROC(SpecPower);
@@ -266,6 +269,99 @@ void ExportMaterial(const UUnrealMaterial* Mat)
 			}
 		}
 	}
+	/*
+	if (Mat)
+	{
+		// Try cast mnaterial to UMaterial3 to get more information about used textures
+
+		if (Mat->IsA("Material3"))
+		{
+			UMaterial3* Material = (UMaterial3*)Mat;
+
+			if (Material != nullptr)
+			{
+
+				printf("Loading Material3 CollectedTextureParameters:\n");
+				// 1) Collected texture parameters
+				for (int i = 0; i < Material->CollectedTextureParameters.Num(); ++i)
+				{
+					const CTextureParameterValue& P = Material->CollectedTextureParameters[i];
+
+					if (IsValidCString(P.Name))
+					{
+						appPrintf("CollectedTexture param: %s\n", P.Name);
+					}
+				}
+				/*
+				for (UObject* E : Material->Expressions)
+				{
+					if (E && E->IsA("MaterialExpressionTextureSampleParameter"))
+					{
+						auto* TS = static_cast<UMaterialExpressionTextureSampleParameter*>(E);
+						/*
+						if(TS !=nullptr && IsValidCString(TS->ParameterName))
+						{
+							printf("Expr param %s =", TS->ParameterName);
+						
+							printf("Expr param %s -> texture %s\n",
+								TS->ParameterName ? TS->ParameterName : "None",
+								TS->Texture ? TS->Texture->Name : "None");
+								
+						}
+					
+
+							
+					}
+				}
+				*/
+				/*
+				if (Material->DiffuseColor)
+					printf("Diffuse input connected to %s\n", Material->DiffuseColor->Name);
+				else
+					printf("Diffuse input not connected\n");
+					*/
+					
+				/*
+				for (int i = 0; i < Material->Expressions.Num(); ++i)
+				{
+					UObject* Eobj = Material->Expressions[i];
+					if (!Eobj) continue;
+					const char* cls = Eobj->GetClassName();
+					appPrintf("Expr[%d] class=%s name=%s\n", i, cls, Eobj->Name);
+
+					if (Eobj->IsA("MaterialExpressionTextureSampleParameter") || Eobj->IsA("MaterialExpressionTextureSample"))
+					{
+						const char* matname = Material->Name ? Material->Name : "None";
+						auto* TS = static_cast<const UMaterialExpressionTextureSampleParameter*>(Eobj);
+						const char* pname = TS->ParameterName ? TS->ParameterName : "None";
+						const char* tex = (TS->Texture && TS->Texture->Name) ? TS->Texture->Name : "None";
+						
+						appPrintf("  TextureSampleParam: ParameterName=%s Texture=%s Material=%s\n", pname, tex, matname);
+
+						// If your UMaterialExpression has an Outputs[] or LinkedTo[] array, follow them:
+						// for each output->LinkedTo: if a link target is the material's input node, you have a connected input.
+					}
+				}
+				*/
+				/*
+				// 2) GetParams (fast canonical check)
+				CMaterialParams Params;
+				Material->GetParams(Params); // signature depends on your fork
+				if (!Params.IsNull())
+				{
+					if (Params.Diffuse) printf("Diffuse connected -> %s\n", Params.Diffuse->Name);
+					else                printf("Diffuse not connected\n");
+					// repeat for other fields...
+				}
+				*/
+			/*
+			}
+		}
+	}
+	*/
+
+	
+	
 
 
 	for (int i = 0; i < ExportTexMap.Num(); i++)
@@ -279,17 +375,12 @@ void ExportMaterial(const UUnrealMaterial* Mat)
 			Ar->Printf("%s=%s\n", safeKey, safeValue);
 	}
 
+
 	for (int i = 0; i < AllTextures.Num(); i++)
 	{
-		UUnrealMaterial* Tex = AllTextures[i];
-		if (Tex == NULL) continue;
-
-		if (IsValidCString(Tex->Name) == false) continue;
-
-
-		printf("Adding texture to export [%d]: %s\n", i, Tex->Name);
-
-		ToExport.AddUnique(Tex);
+		UUnrealMaterial* ExpMat = AllTextures[i];
+		if (ExpMat == NULL) continue;
+		ToExport.AddUnique(ExpMat);
 	}
 
 
